@@ -1,0 +1,2 @@
+perl -Ilib -Iblib/arch/ t/Crypt-OTR.t
+

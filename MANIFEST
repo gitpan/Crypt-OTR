@@ -1,6 +1,4 @@
 Changes
-const-c.inc
-const-xs.inc
 crypt-otr-callbacks.c
 crypt-otr-members.c
 crypt-otr-perl.c
@@ -11,11 +9,21 @@ fallback/const-c.inc
 fallback/const-xs.inc
 lib/Crypt/OTR.pm
 Makefile.PL
-MANIFEST			This list of files
-META.yml
+MANIFEST
+META.yml			Module meta-data (added by MakeMaker)
 OTR.inc
 OTR.xs
 ppport.h
 README
+run
+script/otr.pl
+script/otr_receive.pl
+script/otr_send.pl
+script/socket/caller.pl
+script/socket/caller_2.pl
+script/socket/otr_perl_chat.pl
+script/socket/otr_test.pl
+script/socket/perl_chat.pl
+script/socket/receiver.pl
+script/socket/socket_chat.pl
 t/Crypt-OTR.t
-typemap
