@@ -7,7 +7,7 @@ use Carp qw/croak/;
 
 use AutoLoader;
 
-our $VERSION = '0.02';
+our $VERSION = '0.03';
 
 sub AUTOLOAD {
     # This AUTOLOAD is used to 'autoload' constants from the constant()
@@ -380,6 +380,17 @@ sub _args {
     ($self->_us, $self->account_name, $self->protocol, $self->max_message_size);
 }
 
+# key filename
+sub keyfile {
+    my $self = shift;
+    return crypt_otr_get_keyfile($self->_us);
+}
+
+# fingerprints filename
+sub fprfile {
+    my $self = shift;
+    return crypt_otr_get_fprfile($self->_us);
+}
 
 #########
 
