@@ -4,10 +4,10 @@ use 5.010000;
 use strict;
 use warnings;
 use Carp qw/croak/;
-
+use Crypt::OTR::PublicKey;
 use AutoLoader;
 
-our $VERSION = '0.04';
+our $VERSION = '0.05';
 
 sub AUTOLOAD {
     # This AUTOLOAD is used to 'autoload' constants from the constant()
@@ -162,7 +162,12 @@ sub new {
     my $account_name     = delete $opts{account_name}     || 'crypt_otr_user';
     my $protocol         = delete $opts{protocol}         || 'crypt_otr';
     my $max_message_size = delete $opts{max_message_size} || 0;
-    my $config_dir       = delete $opts{config_dir}       || "$ENV{HOME}/.otr/";
+    my $config_dir       = delete $opts{config_dir}       || "$ENV{HOME}/.otr";
+
+    croak "Unknown opts: " . join(', ', keys %opts) if keys %opts;
+
+    $account_name = lc $account_name;
+    $protocol     = lc $protocol;
 
     croak "$config_dir is not writable"
         if -e $config_dir && ! -w $config_dir;
@@ -246,7 +251,7 @@ sub set_callback {
 
     my $cb_method = $callback_map->{$action}
     or croak "unknown callback $action";
-
+	
     $cb_method->($self->_us, $wrapped_cb);
 }
 
@@ -342,6 +347,20 @@ sub abort_smp {
 	crypt_otr_abort_smp($self->_args, $user_name);
 }
 
+# takes a digest of a message to sign (not the message itself)
+sub sign {
+    my ($self, $message_digest) = @_;
+    my $sig = crypt_otr_sign($self->_args, $message_digest);
+}
+
+# same as above
+sub verify {
+    my ($self, $message_digest, $sig, $pubkey) = @_;
+    my $ok = crypt_otr_verify($message_digest, $sig, $pubkey->data, $pubkey->size, $pubkey->type);
+}
+
+
+
 =item finish($user_name)
 
 Ends an encrypted conversation, no new messages from $user_name will
@@ -395,6 +414,75 @@ sub fprfile {
     return crypt_otr_get_fprfile($self->_us);
 }
 
+# attempt to load or generate a private key, may block for a long time
+sub load_privkey {
+    my $self = shift;
+
+    crypt_otr_load_privkey($self->_args);
+}
+
+sub pubkey_data {
+    my $self = shift;
+    return crypt_otr_get_pubkey_str($self->_args);
+}
+
+sub fingerprint_data {
+	my $self = shift;
+	return crypt_otr_get_privkey_fingerprint($self->_args);
+}
+
+sub fingerprint_data_raw {
+	my $self = shift;
+	return crypt_otr_get_privkey_fingerprint_raw($self->_args);
+}
+
+
+# opaque public key structure
+sub pubkey {
+    my $self = shift;
+
+    return $self->{_pubkey} if $self->{_pubkey};
+
+    # make sure we have a key
+    $self->load_privkey;
+
+    my $pk = Crypt::OTR::PublicKey->new(
+        data => crypt_otr_get_pubkey_data($self->_args),
+        type => crypt_otr_get_pubkey_type($self->_args),
+        size => crypt_otr_get_pubkey_size($self->_args),
+    );
+
+    $self->{_pubkey} = $pk;
+
+    return $pk;
+}
+
+
+
+# read a stored fingerprint file from disk
+sub read_fprfile {
+	my ($self, $fpr_filepath) = @_;
+	return crypt_otr_read_fingerprints($self->_args, $fpr_filepath);
+}
+
+# Write the fingerprint unique to your userstate to disk
+sub write_fprfile{
+	my ($self, $fpr_filepath) = @_;
+	return crypt_otr_write_fingerprints($self->_args, $fpr_filepath);
+}
+
+# Forget all private keys for your user state
+sub forget_all{
+	my $self = shift;
+	
+	crypt_otr_forget_all($self->_args);
+}
+
+
+
+
+
+
 #########
 
 =back
@@ -422,11 +510,21 @@ love to get more people involved
 
 =head1 COPYRIGHT AND LICENSE
 
-Copyright (C) 2010 by Patrick Tierney, Mischa Spiegelmock
+  Copyright (C) 2010 by Patrick Tierney, Mischa Spiegelmock
 
-This library is free software; you can redistribute it and/or modify
-it under the same terms as Perl itself, either Perl version 5.8.8 or,
-at your option, any later version of Perl 5 you may have available.
+    This program is free software: you can redistribute it and/or
+    modify it under the terms of the GNU General Public License as
+    published by the Free Software Foundation, either version 3 of the
+    License, or any later version.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+    General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with this program.  If not, see
+    <http://www.gnu.org/licenses/>.
 
 =cut
 

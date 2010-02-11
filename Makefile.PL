@@ -13,15 +13,31 @@ sub libOtrIsInstalled(){
 	}
 }
 
+sub libGcryptIsInstalled(){
+	if(-f('/usr/include/gcrypt.h')){
+		return 1;
+	} elsif (-f('/usr/local/include/gcrypt.h')){
+		return 1;
+	} else {
+		return 0;
+	}
+}
+
+
 unless( libOtrIsInstalled() ) {
 	die("OTR library not installed.  Please install and continue.");
 }
+
+unless( libGcryptIsInstalled() ) {
+	die("gcrypt not installed.  Please install and continue.");
+}
+
 
 
 WriteMakefile(
     NAME              => 'Crypt::OTR',
     VERSION_FROM      => 'lib/Crypt/OTR.pm', # finds $VERSION
-    PREREQ_PM         => {}, # e.g., Module::Name => 1.1
+    PREREQ_PM         => {},
     ($] >= 5.005 ?     ## Add these new keywords supported since 5.005
       (ABSTRACT_FROM  => 'lib/Crypt/OTR.pm', # retrieve abstract from module
        AUTHOR         => 'Mischa Spiegelmock <mspiegelmock@gmail.com>') : ()),

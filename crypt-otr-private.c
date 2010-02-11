@@ -5,13 +5,11 @@
 // PRIVATE NON-CALLBACK, NON-PERL FUNCTIONS
 ///////////////////////////////////////////////
 
-/* Quetion: should these return values use
- *	sv_2mortal?
- */
-
 static void
 crypt_otr_inject_message( CryptOTRUserState crypt_state, const char* account, const char* protocol, const char* recipient, const char* message )
 {	
+  if (! crypt_state->inject_cb) return;
+
 	dSP;
 		
 	ENTER;
@@ -35,6 +33,8 @@ crypt_otr_display_otr_message( CryptOTRUserState crypt_state, const char* accoun
 						 const char* protocol, const char* username, 
 						 const char* message )
 {
+  if (! crypt_state->system_message_cb) return;
+
 	dSP;
 	int num_items_on_stack;
 	
@@ -97,6 +97,8 @@ void crypt_otr_notify( CryptOTRUserState crypt_state, OtrlNotifyLevel level,
 
 void crypt_otr_notify_new_fingerprint( CryptOTRUserState crypt_state, const char* accountname, const char* protocol, const char* username, unsigned char fingerprint[20] )
 {
+  if (! crypt_state->new_fpr_cb) return;
+
 	dSP;
 	
 	ENTER;
@@ -125,6 +127,8 @@ void crypt_otr_smp_notify( CryptOTRUserState crypt_state, SMPNotifyType notify,
 					  char* protocol, char* username,
 					  char* question )
 {
+  if (! crypt_state->smp_request_cb) return;
+
 	dSP;
 	
 	ENTER;
@@ -169,6 +173,9 @@ void crypt_otr_handle_connected(CryptOTRUserState crypt_state, ConnContext* cont
 
 void crypt_otr_callback_one_string( CV* callback_sub, char* username )
 {
+  if (! callback_sub)
+    return;
+
 	dSP;
 	
 	ENTER;
@@ -240,7 +247,7 @@ void crypt_otr_create_privkey( CryptOTRUserState crypt_state, const char* accoun
 
 	if( key_error ) {
 		printf("***********************************\n");
-		printf("OTR key generation failed!  Please make the following directory: %s\n", keyfile);		
+		printf("OTR key generation failed!  Please ensure the following path is writable: %s\n", keyfile);
 		printf("***********************************\n");
 	}
 	else {
@@ -308,7 +315,7 @@ ConnContext* crypt_otr_get_context( CryptOTRUserState crypt_state, char* account
 	return ctx;
 }
 
-void crypt_otr_new_fingerprint( CryptOTRUserState crypt_state, const char* accountname, const char* protocol, const char* username, unsigned char fingerprint[20] )
+void crypt_otr_new_fingerprint( CryptOTRUserState crypt_state, const char* accountname, const char* protocol, const char* username, unsigned char *fingerprint )
 {
 	if( crypt_state->new_fpr_cb )
 		crypt_otr_notify_new_fingerprint( crypt_state, accountname, protocol,
@@ -316,7 +323,7 @@ void crypt_otr_new_fingerprint( CryptOTRUserState crypt_state, const char* accou
 } 
 
 
-void crypt_otr_notify_socialist_millionaires_statis( CryptOTRUserState crypt_state, char* accountname, char* protocol,
+void crypt_otr_notify_socialist_millionaires_status( CryptOTRUserState crypt_state, char* accountname, char* protocol,
 										   ConnContext* context,
 										   int progress )
 {
@@ -363,6 +370,7 @@ void crypt_otr_abort_smp_context( CryptOTRUserState crypt_state, ConnContext* co
 CryptOTRUserState crypt_otr_create_new_userstate(){
 	CryptOTRUserState crypt_state  = malloc( sizeof( struct crypt_otr_user_state ) );
 
+        crypt_state->privkey_loaded = 0;
 	crypt_state->otrl_state = NULL;
 	crypt_state->root = NULL;
 	crypt_state->keyfile = NULL;
@@ -378,6 +386,12 @@ CryptOTRUserState crypt_otr_create_new_userstate(){
 	crypt_state->warning_cb = NULL;
 	crypt_state->info_cb = NULL;
 	crypt_state->new_fpr_cb = NULL;
+	crypt_state->smp_request_cb = NULL;
 
 	return crypt_state;
+}
+
+
+void crypt_otr_print_error(char* err_string){
+	printf("\n******************\nERROR: %s\n******************\n\n", err_string);
 }

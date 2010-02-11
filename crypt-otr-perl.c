@@ -1,4 +1,4 @@
-
+#include <gcrypt.h>
 
 /////////////////////////////////////////
 //  CRYPT-OTR PERL FUNCTIONS
@@ -23,19 +23,19 @@ CryptOTRUserState crypt_otr_create_user( char* in_root, char* account_name, char
 	crypt_state->otrl_state = otrl_userstate_create();	
 	
 	temp_keyfile = malloc( (strlen(in_root) + 
-					    strlen(PRIVKEY_FILE_NAME) +
-					    strlen(account_name) +
-					    strlen(protocol) +
-					    2 + 1)*sizeof(char) ); // +1 for the \0
+                                strlen(PRIVKEY_FILE_NAME) +
+                                strlen(account_name) +
+                                strlen(protocol) +
+                                3 + 1)*sizeof(char) ); // +1 for the \0
 
 	temp_fingerprintfile =  malloc( (strlen(in_root) + 
-							   strlen(STORE_FILE_NAME) +
-							   strlen(account_name) +
-							   strlen(protocol) + 
-							   2 + 1)*sizeof(char) ); // +1 for the \0 
+                                         strlen(STORE_FILE_NAME) +
+                                         strlen(account_name) +
+                                         strlen(protocol) + 
+                                         3 + 1)*sizeof(char) ); // +1 for the \0 
 		
-	sprintf( temp_keyfile, "%s%s-%s-%s", in_root, PRIVKEY_FILE_NAME, account_name, protocol);
-	sprintf( temp_fingerprintfile, "%s%s-%s-%s", in_root, STORE_FILE_NAME, account_name, protocol);
+	sprintf( temp_keyfile, "%s/%s-%s-%s", in_root, PRIVKEY_FILE_NAME, account_name, protocol);
+	sprintf( temp_fingerprintfile, "%s/%s-%s-%s", in_root, STORE_FILE_NAME, account_name, protocol);
 				
 	crypt_state->keyfile = temp_keyfile;
 	crypt_state->fprfile = temp_fingerprintfile;
@@ -43,18 +43,30 @@ CryptOTRUserState crypt_otr_create_user( char* in_root, char* account_name, char
 	return crypt_state;
 }
 
-void crypt_otr_establish( CryptOTRUserState in_state, char* in_account, char* in_proto, int in_max, 
-					 char* in_username )
-{		
-	if( otrl_privkey_read( in_state->otrl_state, in_state->keyfile ) ) {
-		printf( "Could not read OTR key from %s\n", in_state->keyfile);
-		crypt_otr_create_privkey( in_state, in_account, in_proto );
-	}
-	else {
-		printf( "Loaded private key file from %s\n", in_state->keyfile );
-	}
+// load private key from file, or create new one
+// (this may block for several minutes while generating a key)
+void crypt_otr_load_privkey( CryptOTRUserState in_state, const char* in_account, const char* in_proto, int in_max ) {
+  if (in_state->privkey_loaded)
+    return;
 
-	crypt_otr_startstop(in_state, in_account, in_proto, in_username, 1 );
+  in_state->privkey_loaded = 1;
+
+  gcry_error_t res = otrl_privkey_read( in_state->otrl_state, in_state->keyfile );
+
+  if( res || ! otrl_privkey_find(in_state->otrl_state, in_account, in_proto) ) {
+    printf( "Could not read OTR key from %s\n", in_state->keyfile);
+    crypt_otr_create_privkey( in_state, in_account, in_proto );
+  }
+  else {
+    printf( "Loaded private key file from %s\n", in_state->keyfile );
+  }
+}
+
+void crypt_otr_establish( CryptOTRUserState in_state, char* in_account, char* in_proto, int in_max, 
+					 char* in_username ) {		
+  
+  crypt_otr_load_privkey( in_state, in_account, in_proto, in_max );
+  crypt_otr_startstop(in_state, in_account, in_proto, in_username, 1 );
 }
 
 
@@ -101,9 +113,14 @@ SV* crypt_otr_process_sending( CryptOTRUserState crypt_state, char* in_account, 
 		err = otrl_message_fragment_and_send(&otr_ops, crypt_state, context,
 									  newmessage, OTRL_FRAGMENT_SEND_ALL_BUT_LAST, &message);
 
+		// Checking for errors
+		if(err) {
+			crypt_otr_print_error("Fragmenting and sending message");
+		}
+		
 		otrl_message_free(newmessage);
 	}
-		
+
 	return newSVpv( message, 0 );
 }
 
@@ -190,7 +207,7 @@ SV*  crypt_otr_process_receiving( CryptOTRUserState crypt_state, char* in_accoun
 				if (nextMsg != OTRL_SMP_EXPECT2)
 					crypt_otr_abort_smp_context(crypt_state, context);
 				else {
-					crypt_otr_notify_socialist_millionaires_statis( crypt_state, in_accountname, in_protocol,
+					crypt_otr_notify_socialist_millionaires_status( crypt_state, in_accountname, in_protocol,
 														   context, 2 );
 					context->smstate->nextExpected = OTRL_SMP_EXPECT4;
 				}
@@ -200,7 +217,7 @@ SV*  crypt_otr_process_receiving( CryptOTRUserState crypt_state, char* in_accoun
 				if (nextMsg != OTRL_SMP_EXPECT3)
 					crypt_otr_abort_smp_context(crypt_state, context);
 				else {
-					crypt_otr_notify_socialist_millionaires_statis( crypt_state, in_accountname, in_protocol, 
+					crypt_otr_notify_socialist_millionaires_status( crypt_state, in_accountname, in_protocol, 
 														   context, 3 );
 					context->smstate->nextExpected = OTRL_SMP_EXPECT1;
 				}
@@ -210,7 +227,7 @@ SV*  crypt_otr_process_receiving( CryptOTRUserState crypt_state, char* in_accoun
 				if (nextMsg != OTRL_SMP_EXPECT4)
 					crypt_otr_abort_smp_context(crypt_state, context);
 				else {
-					crypt_otr_notify_socialist_millionaires_statis( crypt_state, in_accountname, in_protocol,
+					crypt_otr_notify_socialist_millionaires_status( crypt_state, in_accountname, in_protocol,
 														   context, 3 );
 					context->smstate->nextExpected = OTRL_SMP_EXPECT1;
 				}
@@ -287,8 +304,184 @@ void crypt_otr_abort_smp( CryptOTRUserState crypt_state, char* in_accountname, c
 SV* crypt_otr_get_keyfile( CryptOTRUserState in_state ) { return newSVpv( in_state->keyfile, 0 ); }
 SV* crypt_otr_get_fprfile( CryptOTRUserState in_state ) { return newSVpv( in_state->fprfile, 0 ); }
 
+OtrlPrivKey* crypt_otr_get_privkey( CryptOTRUserState in_state, char *account, char *proto, int maxsize ) {
+  crypt_otr_load_privkey( in_state, account, proto, maxsize );  // try to ensure a privkey is loaded
+  return otrl_privkey_find( in_state->otrl_state, account, proto );
+}
+
+char* crypt_otr_get_pubkey_data( CryptOTRUserState in_state, char *account, char *proto, int maxsize ) {
+  OtrlPrivKey* privkey = crypt_otr_get_privkey(in_state, account, proto, maxsize);
+  return privkey->pubkey_data;
+}
+size_t crypt_otr_get_pubkey_size( CryptOTRUserState in_state, char *account, char *proto, int maxsize ) {
+  OtrlPrivKey* privkey = crypt_otr_get_privkey(in_state, account, proto, maxsize);
+  return privkey->pubkey_datalen;
+}
+unsigned short crypt_otr_get_pubkey_type( CryptOTRUserState in_state, char *account, char *proto, int maxsize ) {
+  OtrlPrivKey* privkey = crypt_otr_get_privkey(in_state, account, proto, maxsize);
+  return privkey->pubkey_type;
+}
+
+char* crypt_otr_get_privkey_fingerprint( CryptOTRUserState in_state, char *account, char *proto, int maxsize ) {
+	
+	char* fingerprint, fpr_ptr, accountname, protocol;
+	fingerprint = malloc(45);
+
+	// I don't know if it's safe practice to use the vars passed from XS
+	accountname = account;
+	protocol = proto;
+	
+	printf( "About to call otrl_privkey_fingerprint\n");
+
+	fpr_ptr = otrl_privkey_fingerprint(in_state->otrl_state, fingerprint, accountname, protocol);
+	printf( "Done calling otrl_privkey_fingerprint\n");
+	
+	if( fpr_ptr){
+		
+		printf( "About to create perl var\n");
+		// Create perl var, return it
+		SV *sig_sv = newSVpvn( fingerprint, 0);
+		
+		free(fingerprint);
+
+		printf("About to return\n");
+		return sig_sv;
+	} 
+	
+	crypt_otr_print_error("Getting fingerprint");
+	
+	// There was an error, free memory
+	free(fingerprint);
+	
+	return ;
+}
+
+char* crypt_otr_get_privkey_fingerprint_raw( CryptOTRUserState in_state, char *account, char *proto, int maxsize ) {
+
+	char* fingerprint, fpr_ptr, accountname, protocol;
+	fingerprint = malloc(20);
+
+	// I don't know if it's safe practice to use the vars passed from XS
+	accountname = account;
+	protocol = proto;
+
+	printf( "About to call otrl_privkey_fingerprint_raw\n");
+
+	fpr_ptr = otrl_privkey_fingerprint_raw(in_state->otrl_state, fingerprint, accountname, protocol);
+
+	printf( "Done calling otrl_privkey_fingerprint_raw\n");
 
 
+	if( fpr_ptr){
+		// Create perl var, return it
+		SV *sig_sv = newSVpvn( fingerprint, 0);
+		
+		free(fingerprint);
+
+		return sig_sv;
+	} 
+
+	crypt_otr_print_error("Getting fingerprint raw");
+	
+	// There was an error, free memory
+	free(fingerprint);
+	
+	return ;
+}
+
+/* Read the fingerprint store from a file on disk into the 
+ * OtrlUserState stored in given CryptOTRUserState
+ */
+int crypt_otr_read_fingerprints( CryptOTRUserState in_state, char* account, char* proto, int maxsize, char* file_path) {
+	return otrl_privkey_read_fingerprints( in_state->otrl_state, file_path, NULL, NULL);
+}
+
+/* Write the fingerprint store from a given CryptOTRUserState OtrUserState to a file on disk. */
+int crypt_otr_write_fingerprints( CryptOTRUserState in_state, char* account, char* proto, int maxsize, char* file_path) {
+	return otrl_privkey_write_fingerprints( in_state->otrl_state, file_path);
+}
+
+/* Forget all private keys for a given UserState */
+void crypt_otr_forget_all( CryptOTRUserState in_state, char* account, char* proto, int maxsize) {
+	otrl_privkey_forget_all(in_state->otrl_state);
+}
+
+
+
+
+///// Signing
+// would be nice to make this take a scalarref instead of a char*
+SV* crypt_otr_sign( CryptOTRUserState in_state, char *account, char *proto, int maxsize, char *msghash ) {
+
+	OtrlPrivKey *privkey = crypt_otr_get_privkey( in_state, account, proto, maxsize );
+	if (! privkey) {
+		perror("Could not find privkey\n");
+		return NULL;
+	}
+
+	unsigned char *sig;
+	size_t siglen;
+	gcry_error_t sign_error;
+	SV *sig_sv;
+
+	sign_error = otrl_privkey_sign(&sig, &siglen, privkey, msghash, strlen(msghash));
+
+	if(sign_error){
+		// There has to be a better way to pass an error,
+		// though string equality checking seems to be broken for the strings
+		// passed to Perl through XS, oh well
+		crypt_otr_print_error("Signing Data");
+	} else {
+		// copy result, make SV
+		sig_sv = newSVpvn(sig, siglen);
+	}
+
+	// Debugging printout
+	//printf("\nSig:\n-->%s<--\n\n", sig);
+	//printf("Sig length = %u\n", strlen(sig));
+	//printf("Msg length = %u\n", strlen(msghash));
+
+	// we are responsible for freeing the signature
+	free(sig);
+
+	return sig_sv;
+}
+
+SV* crypt_otr_get_pubkey_str( CryptOTRUserState in_state, char *account, char *proto, int maxsize ) {
+  OtrlPrivKey *privkey = crypt_otr_get_privkey( in_state, account, proto, maxsize );
+  SV *privkey_sv = newSVpvn(privkey->pubkey_data, privkey->pubkey_datalen);
+  return privkey_sv;
+}
+
+
+// 
+
+unsigned int crypt_otr_verify( unsigned char *msghash, unsigned char *sig, unsigned char *pubkey_data,
+                               size_t pubkey_length, unsigned short pubkey_type) {
+	// Debugging printout
+	// Checking to see that the signature didn't get corrupted from perl to c
+	//printf("\nSig:\n-->%s<--\n\n", sig);
+	// Checking to make sure this is 0, the only type 
+	//printf("Privkey type:\n-->%u<--\n", pubkey_type);
+	//printf("Sig length = %u\n", strlen(sig));
+	//printf("Msg length = %u\n", strlen(msghash));
+
+	// create s-expression object representing the public key
+	gcry_sexp_t pubkey;
+
+	gcry_sexp_new(&pubkey, pubkey_data, pubkey_length, 1);
+
+	gcry_error_t err = otrl_privkey_verify( sig, strlen(sig), pubkey_type, pubkey, msghash, strlen(msghash) );
+
+	if(err){
+		crypt_otr_print_error("Verifying data");
+	}
+	
+	gcry_sexp_release(pubkey);
+
+	//  printf("type: %d err: %d, msg: %s\n", pubkey_type, err, gcry_strerror(err));
+	return err == 0;
+}
 
 void crypt_otr_cleanup( CryptOTRUserState crypt_state ){
   if (crypt_state->inject_cb)

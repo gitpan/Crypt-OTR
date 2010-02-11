@@ -1,6 +1,6 @@
 --- #YAML:1.0
 name:               Crypt-OTR
-version:            0.04
+version:            0.05
 abstract:           Off-The-Record encryption library for secure instant
 author:
     - Mischa Spiegelmock <mspiegelmock@gmail.com>
