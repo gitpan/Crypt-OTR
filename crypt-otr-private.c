@@ -370,11 +370,12 @@ void crypt_otr_abort_smp_context( CryptOTRUserState crypt_state, ConnContext* co
 CryptOTRUserState crypt_otr_create_new_userstate(){
 	CryptOTRUserState crypt_state  = malloc( sizeof( struct crypt_otr_user_state ) );
 
-        crypt_state->privkey_loaded = 0;
+    crypt_state->privkey_loaded = 0;
 	crypt_state->otrl_state = NULL;
 	crypt_state->root = NULL;
 	crypt_state->keyfile = NULL;
 	crypt_state->fprfile = NULL;
+	crypt_state->max_size = CRYPT_OTR_MAX_SIZE;
 	
 	crypt_state->inject_cb = NULL;
 	crypt_state->system_message_cb = NULL;
@@ -392,6 +393,10 @@ CryptOTRUserState crypt_otr_create_new_userstate(){
 }
 
 
+void crypt_otr_print_error_code(char* err_string, gcry_error_t err){
+  printf("\n******************\nOTR ERROR IN: %s (%d)\n******************\n\n", err_string, gcry_err_code(err));
+}
+
 void crypt_otr_print_error(char* err_string){
-	printf("\n******************\nERROR: %s\n******************\n\n", err_string);
+  printf("\n******************\nOTR UNKNOWN ERROR IN: %s\n******************\n\n", err_string);
 }
